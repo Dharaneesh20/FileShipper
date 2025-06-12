@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4>File Shipper Connection Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5>Your Server IP Address:</h5>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" value="{{ server_ip }}:8000" id="server-address" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard()">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                    <p>Other devices can connect to this address.</p>
+                </div>
+                
+                <h5>How to Connect Between Devices:</h5>
+                <ol>
+                    <li>Ensure all devices are on the same WiFi network</li>
+                    <li>On this device, run the server: <code>python manage.py runserver 0.0.0.0:8000</code></li>
+                    <li>On other devices, open a web browser and go to <strong>http://{{ server_ip }}:8000</strong></li>
+                    <li>Log in with your credentials</li>
+                    <li>Use the Send/Receive features to transfer files</li>
+                </ol>
+                
+                <h5>Troubleshooting:</h5>
+                <ul>
+                    <li>If devices can't connect, check if your firewall is blocking port 8000</li>
+                    <li>For automatic discovery, ensure UDP port 45678 is also open</li>
+                    <li>If your IP changes, you can always find it on this page</li>
+                </ul>
+                
+                <div class="mt-4">
+                    <h5>Test Connection:</h5>
+                    <p>You can test if other devices can reach this server by having them visit:</p>
+                    <div class="alert alert-secondary">
+                        <a href="http://{{ server_ip }}:8000/health/" target="_blank">http://{{ server_ip }}:8000/health/</a>
+                    </div>
+                    <p>This should return a JSON response if the connection is working.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyToClipboard() {
+    var copyText = document.getElementById("server-address");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+    
+    var button = document.querySelector("#server-address + button");
+    var originalHtml = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+    
+    setTimeout(function() {
+        button.innerHTML = originalHtml;
+    }, 2000);
+}
+</script>
+{% endblock %}

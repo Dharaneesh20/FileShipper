@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                Upload File
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" class="dropzone">
+                    {% csrf_token %}
+                    <div class="dz-message">
+                        Click or drop files here to upload
+                    </div>
+                    <div id="uploadStatus" class="mt-2"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                Files
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Uploaded By</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fileList">
+                            {% for file in files %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-earmark"></i>
+                                    {{ file.filename }}
+                                    <small class="text-muted">({{ file.file_size|filesizeformat }})</small>
+                                </td>
+                                <td>{{ file.uploaded_by }}</td>
+                                <td>{{ file.uploaded_at|date:"M d, Y H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'file-download' file.id %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-download"></i> Download
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No files uploaded yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

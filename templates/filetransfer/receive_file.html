@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2>Receive Files</h2>
+        <p>Accept incoming file transfers from other devices on your network</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Your Device</span>
+                    <span class="badge bg-success" id="status-badge">Ready to Receive</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <strong>Your device is visible to others on your network!</strong>
+                    <p class="mb-2">Other users can send files to your device at:</p>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="device-address" readonly>
+                        <button class="btn btn-outline-secondary copy-btn" type="button">Copy</button>
+                    </div>
+                </div>
+                
+                <p class="text-center">Or scan this QR code from another device:</p>
+                <div class="text-center mb-4">
+                    <div id="qrcode"></div>
+                </div>
+                
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-info-circle"></i> Make sure sender and receiver are on the same WiFi network
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Incoming Transfers</span>
+                    <button id="refresh-btn" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="incoming-transfers">
+                    {% if transfers %}
+                        <div class="list-group">
+                            {% for transfer in transfers %}
+                                <div class="list-group-item" data-transfer-id="{{ transfer.id }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ transfer.file.filename }}</strong>
+                                            <br>
+                                            <small class="text-muted">From: {{ transfer.sender }}</small>
+                                            <br>
+                                            <small class="text-muted">{{ transfer.file.file_size|filesizeformat }}</small>
+                                        </div>
+                                        <div>
+                                            {% if transfer.status == 'pending' %}
+                                                <button class="btn btn-sm btn-success accept-btn" data-transfer-id="{{ transfer.id }}">Accept</button>
+                                                <button class="btn btn-sm btn-danger reject-btn" data-transfer-id="{{ transfer.id }}">Reject</button>
+                                            {% elif transfer.status == 'accepted' %}
+                                                <span class="badge bg-success">Accepted</span>
+                                                <div class="progress mt-1" style="height: 5px; width: 100px;">
+                                                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                                                </div>
+                                            {% elif transfer.status == 'rejected' %}
+                                                <span class="badge bg-danger">Rejected</span>
+                                            {% elif transfer.status == 'completed' %}
+                                                <span class="badge bg-primary">Completed</span>
+                                                <a href="{% url 'file-download' transfer.file.id %}" class="btn btn-sm btn-primary">Download</a>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ transfer.status }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-inbox display-4 text-muted"></i>
+                            <p class="mt-3">No pending transfers</p>
+                            <p class="text-muted">Have someone send you files from another device</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div id="transfer-status" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include QRCode.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const deviceInfo = {{ device_info|safe }};
+        const qrcodeDiv = document.getElementById('qrcode');
+        const deviceAddressInput = document.getElementById('device-address');
+        const copyBtn = document.querySelector('.copy-btn');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Set device address
+        const fullAddress = window.location.protocol + '//' + window.location.host;
+        deviceAddressInput.value = fullAddress;
+        
+        // Generate QR code
+        QRCode.toCanvas(qrcodeDiv, JSON.stringify(deviceInfo), { 
+            width: 200,
+            margin: 1
+        }, function(error) {
+            if (error) console.error(error);
+        });
+        
+        // Copy to clipboard functionality
+        copyBtn.addEventListener('click', function() {
+            deviceAddressInput.select();
+            document.execCommand('copy');
+            this.textContent = 'Copied!';
+            setTimeout(() => {
+                this.textContent = 'Copy';
+            }, 2000);
+        });
+        
+        // Listen for real-time transfer updates
+        function startTransferListener() {
+            const evtSource = new EventSource('/api/transfers/stream/');
+            
+            evtSource.onmessage = function(event) {
+                // This would update transfers in real-time when a new one arrives
+                // For simplicity we're just refreshing the page
+                if (event.data && event.data !== "null") {
+                    const notification = document.createElement('div');
+                    notification.className = 'alert alert-info alert-dismissible fade show';
+                    notification.innerHTML = `
+                        New transfer request received! 
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.getElementById('transfer-status').appendChild(notification);
+                    
+                    // Refresh after a short delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                }
+            };
+            
+            evtSource.onerror = function() {
+                console.error("Transfer listener disconnected. Reconnecting...");
+                setTimeout(startTransferListener, 5000);
+            };
+        }
+        
+        // Handle accept/reject buttons
+        document.querySelectorAll('.accept-btn, .reject-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const transferId = this.dataset.transferId;
+                const status = this.classList.contains('accept-btn') ? 'accepted' : 'rejected';
+                
+                fetch(`/api/transfer/${transferId}/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ status })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === status) {
+                        // Success, reload page to refresh UI
+                        window.location.reload();
+                    } else {
+                        document.getElementById('transfer-status').innerHTML = 
+                            `<div class="alert alert-danger">Failed to update transfer status</div>`;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('transfer-status').innerHTML = 
+                        `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                    console.error('Error updating transfer:', error);
+                });
+            });
+        });
+        
+        // Refresh button
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function() {
+                window.location.reload();
+            });
+        }
+        
+        // Start transfer listener for real-time updates
+        startTransferListener();
+    });
+</script>
+{% endblock %}

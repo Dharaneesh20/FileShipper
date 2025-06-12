@@ -1,0 +1,598 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row mb-4 animate-fade-in">
+    <div class="col-md-12">
+        <h2 class="text-gradient">Send Files</h2>
+        <p>Select files to send to a device on your local network</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 animate-slide-up" style="animation-delay: 0.1s">
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Your Device</span>
+                    <span class="badge bg-success pulse">Online</span>
+                </div>
+            </div>
+            <div class="card-body text-center">
+                <div id="qrcode" class="mb-3 text-center glow-effect"></div>
+                <p>Scan this QR code on another device to connect</p>
+                <div class="alert alert-info">
+                    <strong>Your IP Address:</strong> <span id="your-ip" class="clipboard-copy"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 animate-slide-up" style="animation-delay: 0.2s">
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Device Scanner</span>
+                    <button id="refresh-devices" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise spin-on-hover"></i> Scan
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="device-scanner">
+                    <!-- Radar Animation -->
+                    <div class="radar-container mb-4">
+                        <div class="radar-sweep"></div>
+                        <div class="radar-ring"></div>
+                        <div class="radar-ring"></div>
+                        <div class="radar-ring"></div>
+                        <div id="radar-devices"></div>
+                    </div>
+                    
+                    <div class="progress mb-3" style="height: 4px;">
+                        <div class="progress-bar transfer-progress" style="width: 100%"></div>
+                    </div>
+                    <div id="nearby-devices" class="list-group">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary pulse-glow" role="status">
+                                <span class="visually-hidden">Searching...</span>
+                            </div>
+                            <p class="mt-2">Scanning for nearby devices...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <p class="text-center mb-2 text-muted">- OR -</p>
+                        <form id="manual-connect-form">
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" id="device-ip" placeholder="192.168.1.x:8000">
+                                <button class="btn btn-outline-primary" type="button" id="connect-btn">
+                                    <i class="bi bi-plug-fill"></i> Connect
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 animate-slide-up" style="animation-delay: 0.3s">
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Your Files</span>
+                    <span class="badge bg-primary">{{ files|length }} Files</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="list-group file-list">
+                    {% for file in files %}
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center file-item animate-fade-in" 
+                         data-file-id="{{ file.id }}" style="animation-delay: {{ forloop.counter0|add:1|divisibleby:10 }}0ms">
+                        <div>
+                            <i class="bi bi-file-earmark-{% if 'image' in file.file_type %}image{% elif 'video' in file.file_type %}play{% elif 'audio' in file.file_type %}music{% else %}text{% endif %} me-2 text-accent"></i>
+                            <strong>{{ file.filename }}</strong>
+                            <br>
+                            <small class="text-muted">{{ file.file_size|filesizeformat }}</small>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input file-checkbox" type="checkbox" value="">
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-3">
+                        <i class="bi bi-folder2-open display-4 text-muted"></i>
+                        <p class="mt-3">No files available to send.</p>
+                        <a href="{% url 'file-manager' %}" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload Files
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-3 text-center">
+                    <button id="send-button" class="btn btn-primary glow-on-hover" disabled>
+                        <i class="bi bi-send-fill"></i> Send Files
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 animate-slide-up" style="animation-delay: 0.4s">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Transfer Status</span>
+                    <span class="badge" id="transfer-count">No active transfers</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="transfer-status">
+                    <div class="text-center py-4">
+                        <i class="bi bi-arrow-down-up display-4 text-muted"></i>
+                        <p class="mt-3">No active transfers</p>
+                        <p class="text-muted">Selected files will appear here when sent</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include QRCode.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const deviceInfo = {{ device_info|safe }};
+        const qrcodeDiv = document.getElementById('qrcode');
+        const yourIpSpan = document.getElementById('your-ip');
+        const nearbyDevicesDiv = document.getElementById('nearby-devices');
+        const refreshDevicesBtn = document.getElementById('refresh-devices');
+        const sendButton = document.getElementById('send-button');
+        const radarDevices = document.getElementById('radar-devices');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        let selectedDevice = null;
+        let selectedFiles = [];
+        let discoveredDevices = [];
+        
+        // Sound effects
+        const sounds = {
+            scan: new Howl({ src: ['/static/sounds/scan.mp3'], volume: 0.3 }),
+            connect: new Howl({ src: ['/static/sounds/connect.mp3'], volume: 0.5 }),
+            select: new Howl({ src: ['/static/sounds/select.mp3'], volume: 0.2 }),
+            send: new Howl({ src: ['/static/sounds/send.mp3'] }),
+            notification: new Howl({ src: ['/static/sounds/notification.mp3'], volume: 0.4 })
+        };
+        
+        // Display device IP
+        yourIpSpan.textContent = `${deviceInfo.ip}:${deviceInfo.port || '8000'}`;
+        
+        // Generate QR code using JavaScript
+        QRCode.toCanvas(qrcodeDiv, JSON.stringify(deviceInfo), { 
+            width: 200,
+            margin: 1,
+            color: {
+                dark: '#00a8ff',
+                light: '#121212'
+            }
+        }, function(error) {
+            if (error) console.error(error);
+        });
+        
+        // Handle file selection
+        document.querySelectorAll('.file-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const fileItem = this.closest('.file-item');
+                const fileId = fileItem.dataset.fileId;
+                
+                if (this.checked) {
+                    sounds.select.play();
+                    fileItem.classList.add('active');
+                    fileItem.style.boxShadow = '0 0 10px rgba(0, 168, 255, 0.5)';
+                    if (!selectedFiles.includes(fileId)) {
+                        selectedFiles.push(fileId);
+                    }
+                } else {
+                    fileItem.classList.remove('active');
+                    fileItem.style.boxShadow = '';
+                    selectedFiles = selectedFiles.filter(id => id !== fileId);
+                }
+                
+                // Update send button state
+                updateSendButton();
+            });
+        });
+        
+        // Update send button enabled/disabled state
+        function updateSendButton() {
+            sendButton.disabled = !(selectedDevice && selectedFiles.length > 0);
+            
+            // Update badge
+            const transferCount = document.getElementById('transfer-count');
+            if (selectedFiles.length > 0) {
+                transferCount.textContent = `${selectedFiles.length} file(s) selected`;
+                transferCount.className = 'badge bg-primary';
+            } else {
+                transferCount.textContent = 'No files selected';
+                transferCount.className = 'badge bg-secondary';
+            }
+        }
+        
+        // Simulate device discovery
+        function simulateDeviceDiscovery() {
+            refreshDevicesBtn.disabled = true;
+            refreshDevicesBtn.innerHTML = '<i class="bi bi-arrow-clockwise fa-spin"></i> Scanning...';
+            
+            // Play scan sound
+            sounds.scan.play();
+            
+            // Clear existing devices
+            while (radarDevices.firstChild) {
+                radarDevices.removeChild(radarDevices.firstChild);
+            }
+            
+            // Add new random devices to the radar
+            const deviceCount = Math.floor(Math.random() * 3) + 1; // 1-3 devices
+            const existingDevices = discoveredDevices.map(d => d.name);
+            
+            const deviceNames = [
+                'iPhone 13', 'Galaxy S21', 'Pixel 6', 'Macbook Pro', 
+                'Surface Pro', 'iPad Air', 'Lenovo Laptop', 'Alienware PC',
+                'Xiaomi Phone', 'OnePlus 9', 'Desktop PC', 'ThinkPad X1'
+            ].filter(name => !existingDevices.includes(name));
+            
+            // Shuffle array
+            deviceNames.sort(() => 0.5 - Math.random());
+            
+            setTimeout(() => {
+                for (let i = 0; i < deviceCount; i++) {
+                    // Add to discovered devices list
+                    if (deviceNames.length > i) {
+                        const newDevice = {
+                            name: deviceNames[i],
+                            ip: `192.168.1.${100 + Math.floor(Math.random() * 100)}`,
+                            port: '8000'
+                        };
+                        
+                        discoveredDevices.push(newDevice);
+                        
+                        // Create a radar dot
+                        const dot = document.createElement('div');
+                        dot.className = 'radar-dot';
+                        
+                        // Random position on radar
+                        const angle = Math.random() * Math.PI * 2;
+                        const distance = 30 + Math.random() * 100; // 30-130px from center
+                        const x = Math.cos(angle) * distance + 150 - 5; // center at 150px, offset dot size
+                        const y = Math.sin(angle) * distance + 150 - 5;
+                        
+                        dot.style.left = `${x}px`;
+                        dot.style.top = `${y}px`;
+                        dot.dataset.device = JSON.stringify(newDevice);
+                        
+                        // Add tooltip
+                        dot.title = `${newDevice.name} (${newDevice.ip})`;
+                        
+                        // Add to radar
+                        radarDevices.appendChild(dot);
+                        
+                        // Add notification sound when new device found
+                        setTimeout(() => {
+                            sounds.notification.play();
+                        }, 500 + i * 300);
+                    }
+                }
+                
+                // Update device list
+                updateDeviceList(discoveredDevices);
+                
+                // Enable refresh button
+                refreshDevicesBtn.disabled = false;
+                refreshDevicesBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Scan';
+                
+            }, 3000); // Simulate 3 seconds scan
+        }
+        
+        function updateDeviceList(devices) {
+            if (!devices || devices.length === 0) {
+                nearbyDevicesDiv.innerHTML = '<div class="text-center py-3">No devices found nearby</div>';
+                return;
+            }
+            
+            let html = '';
+            devices.forEach((device, index) => {
+                const isSelected = selectedDevice && selectedDevice.ip === device.ip;
+                html += `
+                    <div class="list-group-item device-card ${isSelected ? 'active' : ''}" 
+                         data-device-ip="${device.ip}" 
+                         data-device-port="${device.port}"
+                         style="animation-delay: ${index * 100}ms">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-device-${index % 2 === 0 ? 'hdd' : 'ssd'} me-2 text-accent"></i>
+                                <strong>${device.name}</strong>
+                                <br>
+                                <small>${device.ip}:${device.port}</small>
+                            </div>
+                            <button class="btn btn-sm ${isSelected ? 'btn-light' : 'btn-primary'} glow-on-hover select-device-btn">
+                                ${isSelected ? '<i class="bi bi-check-circle"></i> Selected' : '<i class="bi bi-link"></i> Select'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            nearbyDevicesDiv.innerHTML = html;
+            
+            // Add device selection handlers
+            document.querySelectorAll('.select-device-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const deviceItem = this.closest('.list-group-item');
+                    
+                    // Deselect all devices
+                    document.querySelectorAll('.list-group-item.device-card').forEach(item => {
+                        item.classList.remove('active');
+                        const btn = item.querySelector('.select-device-btn');
+                        if (btn) {
+                            btn.classList.remove('btn-light');
+                            btn.classList.add('btn-primary');
+                            btn.innerHTML = '<i class="bi bi-link"></i> Select';
+                        }
+                    });
+                    
+                    // Select this device
+                    deviceItem.classList.add('active');
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-light');
+                    this.innerHTML = '<i class="bi bi-check-circle"></i> Selected';
+                    
+                    // Play connect sound
+                    sounds.connect.play();
+                    
+                    selectedDevice = {
+                        ip: deviceItem.dataset.deviceIp,
+                        port: deviceItem.dataset.devicePort
+                    };
+                    
+                    // Update send button state
+                    updateSendButton();
+                });
+            });
+        }
+        
+        // Manual connection
+        document.getElementById('connect-btn').addEventListener('click', function() {
+            const deviceIpInput = document.getElementById('device-ip');
+            const deviceAddress = deviceIpInput.value;
+            
+            if (!deviceAddress) {
+                showNotification('Please enter a device address', 'danger');
+                return;
+            }
+            
+            // Extract IP and port
+            let ip = deviceAddress;
+            let port = '8000';
+            
+            if (deviceAddress.includes(':')) {
+                [ip, port] = deviceAddress.split(':');
+            }
+            
+            // Show connecting animation
+            this.innerHTML = '<i class="bi bi-hourglass-split fa-spin"></i> Connecting...';
+            this.disabled = true;
+            
+            // Connect to the device
+            setTimeout(() => {
+                // Create a new device entry and select it
+                const newDevice = {
+                    name: 'Manual Device',
+                    ip: ip,
+                    port: port
+                };
+                
+                // Add to discovered devices
+                discoveredDevices.push(newDevice);
+                
+                // Create a radar dot for the manual device
+                const dot = document.createElement('div');
+                dot.className = 'radar-dot';
+                dot.style.backgroundColor = 'rgba(255, 165, 0, 0.8)'; // orange
+                dot.style.boxShadow = '0 0 5px rgba(255, 165, 0, 0.8), 0 0 10px rgba(255, 165, 0, 0.5)';
+                
+                // Position in center-right of radar
+                dot.style.left = '225px';
+                dot.style.top = '150px';
+                dot.dataset.device = JSON.stringify(newDevice);
+                dot.title = `${newDevice.name} (${newDevice.ip})`;
+                
+                // Add to radar
+                radarDevices.appendChild(dot);
+                
+                // Update device list
+                updateDeviceList(discoveredDevices);
+                
+                // Show success notification
+                showNotification('Device connected successfully', 'success');
+                
+                // Play connect sound
+                sounds.connect.play();
+                
+                // Reset button
+                this.innerHTML = '<i class="bi bi-plug-fill"></i> Connect';
+                this.disabled = false;
+                
+                // Auto-select the device
+                setTimeout(() => {
+                    const deviceItems = document.querySelectorAll('.device-card');
+                    const lastDevice = deviceItems[deviceItems.length - 1];
+                    if (lastDevice) {
+                        const selectBtn = lastDevice.querySelector('.select-device-btn');
+                        if (selectBtn) selectBtn.click();
+                    }
+                }, 500);
+                
+            }, 1500); // Simulate connection delay
+        });
+        
+        // Send files
+        sendButton.addEventListener('click', function() {
+            if (!selectedDevice || selectedFiles.length === 0) return;
+            
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-arrow-repeat fa-spin"></i> Sending...';
+            
+            // Play send sound
+            sounds.send.play();
+            
+            const transferStatusDiv = document.getElementById('transfer-status');
+            transferStatusDiv.innerHTML = `
+                <div class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Sending...</span>
+                    </div>
+                    <p class="mt-3">Initiating transfer to ${selectedDevice.ip}...</p>
+                </div>
+            `;
+            
+            // Simulate file transfer
+            setTimeout(() => {
+                let html = '<div class="list-group">';
+                
+                // Get file names
+                const fileItems = {};
+                document.querySelectorAll('.file-item').forEach(item => {
+                    fileItems[item.dataset.fileId] = {
+                        name: item.querySelector('strong').textContent,
+                        size: item.querySelector('small').textContent
+                    };
+                });
+                
+                selectedFiles.forEach((fileId, index) => {
+                    const file = fileItems[fileId] || { name: 'Unknown file', size: '?' };
+                    const progress = Math.floor(Math.random() * 50) + 50; // 50-100%
+                    
+                    html += `
+                        <div class="list-group-item animate-fade-in" style="animation-delay: ${index * 100}ms">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-file-earmark-arrow-up me-2 text-accent"></i>
+                                    <strong>${file.name}</strong>
+                                    <div class="text-muted small">To: ${selectedDevice.ip} • ${file.size}</div>
+                                </div>
+                                <span class="badge bg-info">Sending</span>
+                            </div>
+                            <div class="progress mt-2" style="height: 4px;">
+                                <div class="progress-bar transfer-progress" style="width: ${progress}%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="text-muted">${progress}%</small>
+                                <small class="text-muted">ETA: ${Math.floor(Math.random() * 10) + 1}s</small>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                transferStatusDiv.innerHTML = html;
+                
+                // Update transfer count badge
+                const transferCount = document.getElementById('transfer-count');
+                transferCount.textContent = `${selectedFiles.length} active transfers`;
+                transferCount.className = 'badge bg-info';
+                
+                // Re-enable send button after delay
+                setTimeout(() => {
+                    sendButton.disabled = false;
+                    sendButton.innerHTML = '<i class="bi bi-send-fill"></i> Send Files';
+                    
+                    // Show completion
+                    showNotification(`Files sent to ${selectedDevice.ip}:${selectedDevice.port}`, 'success');
+                    
+                    // Reset file selections
+                    document.querySelectorAll('.file-checkbox').forEach(cb => {
+                        cb.checked = false;
+                    });
+                    document.querySelectorAll('.file-item').forEach(item => {
+                        item.classList.remove('active');
+                        item.style.boxShadow = '';
+                    });
+                    selectedFiles = [];
+                    
+                    // Update send button state
+                    updateSendButton();
+                    
+                    // Show transfer completion
+                    setTimeout(() => {
+                        // Update transfer badges
+                        document.querySelectorAll('.list-group-item .badge').forEach(badge => {
+                            badge.className = 'badge bg-success';
+                            badge.textContent = 'Completed';
+                        });
+                        
+                        // Set progress bars to 100%
+                        document.querySelectorAll('.list-group-item .progress-bar').forEach(progressBar => {
+                            progressBar.style.width = '100%';
+                        });
+                        
+                        // Update ETA
+                        document.querySelectorAll('.list-group-item .d-flex.justify-content-between.mt-1').forEach(div => {
+                            div.innerHTML = '<small class="text-muted">100%</small><small class="text-success">Transfer complete</small>';
+                        });
+                        
+                        // Update transfer count badge
+                        transferCount.textContent = `${selectedFiles.length} transfers completed`;
+                        transferCount.className = 'badge bg-success';
+                    }, 3000);
+                }, 5000);
+                
+            }, 2000);
+        });
+        
+        // Refresh devices manually
+        refreshDevicesBtn.addEventListener('click', function() {
+            simulateDeviceDiscovery();
+        });
+        
+        // Show notification helper function
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type} alert-dismissible fade show fixed-top mx-auto mt-3 animate-slide-up`;
+            notification.style.maxWidth = '500px';
+            notification.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+            notification.style.zIndex = '1050';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+        
+        // Copy to clipboard functionality
+        document.querySelectorAll('.clipboard-copy').forEach(el => {
+            el.addEventListener('click', function() {
+                const text = this.textContent;
+                navigator.clipboard.writeText(text)
+                    .then(() => showNotification('Copied to clipboard!', 'success'))
+                    .catch(err => console.error('Failed to copy: ', err));
+            });
+        });
+        
+        // Initialize with simulated devices
+        simulateDeviceDiscovery();
+    });
+</script>
+{% endblock %}
